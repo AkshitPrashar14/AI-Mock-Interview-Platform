@@ -1,0 +1,46 @@
+# ==============================================================
+#  Backend Dockerfile — AI Mock Interview Platform
+#  Stage 1: Build with Maven
+#  Stage 2: Slim runtime image
+#
+#  NOTE: This is a PLACEHOLDER.
+#        Build arguments, health checks, and production
+#        hardening are intentionally deferred.
+# ==============================================================
+
+# ---- Stage 1: Build ----
+FROM eclipse-temurin:21-jdk-alpine AS builder
+
+WORKDIR /build
+
+# Copy Maven wrapper and POM first (layer caching)
+COPY mvnw .
+COPY .mvn .mvn
+COPY pom.xml .
+
+# Download dependencies (cached unless pom.xml changes)
+RUN ./mvnw dependency:go-offline -B
+
+# Copy source and build
+COPY src ./src
+RUN ./mvnw package -DskipTests -B
+
+# ---- Stage 2: Runtime ----
+FROM eclipse-temurin:21-jre-alpine AS runtime
+
+WORKDIR /app
+
+# Create a non-root user
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
+# Copy the built JAR
+COPY --from=builder /build/target/*.jar app.jar
+
+# Set file ownership
+RUN chown appuser:appgroup app.jar
+
+USER appuser
+
+EXPOSE 8080
+
+ENTRYPOINT ["java", "-jar", "app.jar"]

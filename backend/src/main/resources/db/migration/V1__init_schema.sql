@@ -1,0 +1,17 @@
+-- ==============================================================================
+-- V1 — Initial Schema Baseline
+-- AI Mock Interview Platform
+--
+-- Sprint:  Sprint 1 — Backend Foundation
+-- Author:  Engineering Team
+-- Date:    2026-07-05
+--
+-- Purpose:
+--   This is the Flyway baseline migration. It establishes that the migration
+--   pipeline is functional. Business entity tables will be added from Sprint 2
+--   onward as each module is implemented.
+--
+-- Note:
+--   This file MUST remain empty of DDL statements. Its only purpose is to
+--   prove that Flyway runs successfully on application startup.
+-- ==============================================================================

@@ -1,0 +1,65 @@
+# ==============================================================================
+#  AI Mock Interview Platform — Production Profile
+#  Active when: SPRING_PROFILES_ACTIVE=prod
+#
+#  ALL secrets MUST be supplied via environment variables.
+#  No default values are provided here.
+# ==============================================================================
+
+spring:
+
+  # --- Database (all values from environment — no defaults) ---
+  datasource:
+    url:              ${DB_URL}
+    username:         ${DB_USERNAME}
+    password:         ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      pool-name: InterviewProdPool
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  # --- JPA / Hibernate ---
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          batch_size: 50
+
+  # --- Flyway ---
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+    validate-on-migrate: true
+    out-of-order: false
+
+# --- Logging (INFO only in prod — no SQL, no debug traces) ---
+logging:
+  level:
+    root: INFO
+    com.interviewplatform: INFO
+    org.springframework.web: WARN
+    org.flywaydb: INFO
+    org.hibernate.SQL: OFF
+    org.hibernate.orm.jdbc.bind: OFF
+
+# --- OpenAPI disabled in production ---
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+# --- Actuator health details hidden by default in prod ---
+management:
+  endpoint:
+    health:
+      show-details: never

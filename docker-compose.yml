@@ -1,0 +1,38 @@
+# ==============================================================
+#  Docker Compose — AI Mock Interview Platform
+#  Sprint 1 Scope: PostgreSQL only
+#
+#  Future sprints will add: backend, frontend, stt-service, nginx
+#
+#  Usage:
+#    docker-compose up -d          # Start PostgreSQL in background
+#    docker-compose down           # Stop (preserve data)
+#    docker-compose down -v        # Stop and delete volume
+# ==============================================================
+
+services:
+
+  # ---- PostgreSQL 16 ----
+  postgres:
+    image: postgres:16-alpine
+    container_name: interview-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       ${POSTGRES_DB:-interviewdb}
+      POSTGRES_USER:     ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-interviewdb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+# ---- Named Volumes ----
+volumes:
+  postgres_data:
+    driver: local
