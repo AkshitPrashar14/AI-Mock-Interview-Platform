@@ -55,3 +55,15 @@ springdoc:
     enabled: true
   swagger-ui:
     enabled: true
+
+# =============================================================================
+# WARNING: This is a DEVELOPMENT-ONLY JWT secret.
+# It is intentionally committed for developer convenience.
+# NEVER use this secret in staging or production.
+# Production must set: JWT_SECRET environment variable (min 256-bit key).
+# =============================================================================
+app:
+  jwt:
+    secret: ZGV2LW9ubHktc2VjcmV0LWtleS1mb3ItbG9jYWwtZGV2ZWxvcG1lbnQtb25seS0yNTZiaXQ=
+  cors:
+    allowed-origins: http://localhost:3000

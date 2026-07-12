@@ -28,6 +28,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * <p><b>NOTE:</b> No business logic is implemented in this scaffold.</p>
  */
 @SpringBootApplication
+@org.springframework.boot.context.properties.ConfigurationPropertiesScan
 public class InterviewPlatformApplication {
 
     public static void main(String[] args) {

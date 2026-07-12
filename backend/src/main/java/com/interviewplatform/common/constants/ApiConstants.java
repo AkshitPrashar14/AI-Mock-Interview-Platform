@@ -35,6 +35,9 @@ public final class ApiConstants {
     /** MDC key under which the request ID is stored for log correlation. */
     public static final String MDC_REQUEST_ID = "requestId";
 
+    /** Canonical alias for {@link #MDC_REQUEST_ID} — use in Sprint 2+ code. */
+    public static final String MDC_REQUEST_ID_KEY = MDC_REQUEST_ID;
+
     // ---- Application Meta ----
 
     /** Canonical service name — used in health responses and log context. */

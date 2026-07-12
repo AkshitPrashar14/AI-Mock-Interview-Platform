@@ -1,8 +1,18 @@
 package com.interviewplatform.common.exception;
 
+import com.interviewplatform.auth.exception.InvalidCredentialsException;
+import com.interviewplatform.auth.exception.RefreshTokenExpiredException;
+import com.interviewplatform.auth.exception.RefreshTokenNotFoundException;
 import com.interviewplatform.common.constants.ApiConstants;
 import com.interviewplatform.common.response.ApiError;
 import com.interviewplatform.common.response.ApiResponse;
+import com.interviewplatform.interview.exception.InterviewAlreadyStartedException;
+import com.interviewplatform.interview.exception.InterviewNotFoundException;
+import com.interviewplatform.interview.exception.InvalidStateTransitionException;
+import com.interviewplatform.report.service.ReportNotFoundException;
+import com.interviewplatform.user.exception.UnauthorizedException;
+import com.interviewplatform.user.exception.UserAlreadyExistsException;
+import com.interviewplatform.user.exception.UserNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
@@ -121,6 +131,124 @@ public class GlobalExceptionHandler {
     }
 
     // =========================================================================
+    // Sprint 2 — Auth & User exceptions
+    // =========================================================================
+
+    /** 409 Conflict — duplicate email registration. */
+    @ExceptionHandler(UserAlreadyExistsException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUserAlreadyExists(
+            UserAlreadyExistsException ex,
+            HttpServletRequest request) {
+        log.warn("[{}] User already exists: {}", requestId(), ex.getMessage());
+        ApiError error = ApiError.of("USER_ALREADY_EXISTS", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error(ex.getMessage(), error, request.getRequestURI(), requestId()));
+    }
+
+    /** 404 Not Found — user lookup by id or email failed. */
+    @ExceptionHandler(UserNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUserNotFound(
+            UserNotFoundException ex,
+            HttpServletRequest request) {
+        log.warn("[{}] User not found: {}", requestId(), ex.getMessage());
+        ApiError error = ApiError.of("USER_NOT_FOUND", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.error(ex.getMessage(), error, request.getRequestURI(), requestId()));
+    }
+
+    /** 401 Unauthorized — invalid email/password combination. */
+    @ExceptionHandler(InvalidCredentialsException.class)
+    public ResponseEntity<ApiResponse<Void>> handleInvalidCredentials(
+            InvalidCredentialsException ex,
+            HttpServletRequest request) {
+        log.warn("[{}] Invalid credentials: {} {}", requestId(), request.getMethod(), request.getRequestURI());
+        ApiError error = ApiError.of("INVALID_CREDENTIALS", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ApiResponse.error(ex.getMessage(), error, request.getRequestURI(), requestId()));
+    }
+
+    /** 401 Unauthorized — refresh token expired. */
+    @ExceptionHandler(RefreshTokenExpiredException.class)
+    public ResponseEntity<ApiResponse<Void>> handleRefreshTokenExpired(
+            RefreshTokenExpiredException ex,
+            HttpServletRequest request) {
+        log.warn("[{}] Refresh token expired: {} {}", requestId(), request.getMethod(), request.getRequestURI());
+        ApiError error = ApiError.of("REFRESH_TOKEN_EXPIRED", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ApiResponse.error(ex.getMessage(), error, request.getRequestURI(), requestId()));
+    }
+
+    /** 401 Unauthorized — refresh token not found or revoked. */
+    @ExceptionHandler(RefreshTokenNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleRefreshTokenNotFound(
+            RefreshTokenNotFoundException ex,
+            HttpServletRequest request) {
+        log.warn("[{}] Refresh token not found: {} {}", requestId(), request.getMethod(), request.getRequestURI());
+        ApiError error = ApiError.of("REFRESH_TOKEN_NOT_FOUND", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ApiResponse.error(ex.getMessage(), error, request.getRequestURI(), requestId()));
+    }
+
+    /** 401 Unauthorized — generic unauthorized access. */
+    @ExceptionHandler(UnauthorizedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUnauthorized(
+            UnauthorizedException ex,
+            HttpServletRequest request) {
+        log.warn("[{}] Unauthorized: {} {}", requestId(), request.getMethod(), request.getRequestURI());
+        ApiError error = ApiError.of("UNAUTHORIZED", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ApiResponse.error(ex.getMessage(), error, request.getRequestURI(), requestId()));
+    }
+
+    // =========================================================================
+    // Module 2 — Interview Session Management exceptions
+    // =========================================================================
+
+    /** 404 Not Found — interview does not exist or does not belong to the candidate. */
+    @ExceptionHandler(InterviewNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleInterviewNotFound(
+            InterviewNotFoundException ex,
+            HttpServletRequest request) {
+        log.warn("[{}] Interview not found: {}", requestId(), ex.getMessage());
+        ApiError error = ApiError.of("INTERVIEW_NOT_FOUND", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.error(ex.getMessage(), error, request.getRequestURI(), requestId()));
+    }
+
+    /** 409 Conflict — state transition not permitted by the state machine. */
+    @ExceptionHandler(InvalidStateTransitionException.class)
+    public ResponseEntity<ApiResponse<Void>> handleInvalidStateTransition(
+            InvalidStateTransitionException ex,
+            HttpServletRequest request) {
+        log.warn("[{}] Invalid state transition: {}", requestId(), ex.getMessage());
+        ApiError error = ApiError.of("INVALID_STATE_TRANSITION", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error(ex.getMessage(), error, request.getRequestURI(), requestId()));
+    }
+
+    /** 409 Conflict — attempted to start an already-started interview. */
+    @ExceptionHandler(InterviewAlreadyStartedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleInterviewAlreadyStarted(
+            InterviewAlreadyStartedException ex,
+            HttpServletRequest request) {
+        log.warn("[{}] Interview already started: {}", requestId(), ex.getMessage());
+        ApiError error = ApiError.of("INTERVIEW_ALREADY_STARTED", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error(ex.getMessage(), error, request.getRequestURI(), requestId()));
+    }
+
+    /** 404 Not Found — report does not exist yet (may still be generating). */
+    @ExceptionHandler(ReportNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleReportNotFound(
+            ReportNotFoundException ex,
+            HttpServletRequest request) {
+        log.warn("[{}] Report not found: {}", requestId(), ex.getMessage());
+        ApiError error = ApiError.of("REPORT_NOT_FOUND", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.error(ex.getMessage(), error, request.getRequestURI(), requestId()));
+    }
+
+    // =========================================================================
     // 500 — Catch-all
     // =========================================================================
 
@@ -148,7 +276,7 @@ public class GlobalExceptionHandler {
 
     /** Reads requestId from MDC (set by RequestLoggingFilter). Falls back to "-". */
     private String requestId() {
-        String id = MDC.get(ApiConstants.MDC_REQUEST_ID);
+        String id = MDC.get(ApiConstants.MDC_REQUEST_ID_KEY);
         return (id != null) ? id : "-";
     }
 }
