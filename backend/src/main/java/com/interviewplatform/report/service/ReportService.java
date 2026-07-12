@@ -51,7 +51,17 @@ public class ReportService {
         Interview interview = interviewRepository.findById(interviewId)
                 .orElseThrow(() -> new InterviewNotFoundException(interviewId));
 
-        Report report = reportCompilerAgent.compile(interview, evaluation);
+        com.interviewplatform.agents.common.InterviewContext context = com.interviewplatform.agents.common.InterviewContext.builder()
+                .interview(interview)
+                .candidate(interview.getCandidate())
+                .metadata(java.util.Map.of("evaluations", java.util.List.of(evaluation)))
+                .build();
+
+        com.interviewplatform.agents.common.AgentResult result = reportCompilerAgent.execute(context);
+        if (!result.isSuccess() || !(result.getPayload() instanceof Report report)) {
+            throw new RuntimeException("Failed to compile report");
+        }
+
         Report saved = reportRepository.save(report);
 
         // Recompute user analytics based on this new report

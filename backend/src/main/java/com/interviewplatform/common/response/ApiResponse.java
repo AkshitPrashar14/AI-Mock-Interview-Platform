@@ -100,6 +100,13 @@ public class ApiResponse<T> {
         return success("OK", data, path, requestId);
     }
 
+    /**
+     * Build a successful response with data only. Path and requestId will be null.
+     */
+    public static <T> ApiResponse<T> success(T data) {
+        return success("OK", data, null, null);
+    }
+
     // =========================================================================
     // Static factory methods — error
     // =========================================================================

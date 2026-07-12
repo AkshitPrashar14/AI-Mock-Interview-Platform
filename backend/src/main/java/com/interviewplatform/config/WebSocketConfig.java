@@ -1,6 +1,6 @@
 package com.interviewplatform.config;
 
-import com.interviewplatform.security.JwtService;
+import com.interviewplatform.security.jwt.JwtService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Configuration;

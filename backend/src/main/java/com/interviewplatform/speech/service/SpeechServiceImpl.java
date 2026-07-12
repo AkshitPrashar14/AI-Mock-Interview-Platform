@@ -58,8 +58,8 @@ public class SpeechServiceImpl implements SpeechService {
     public SpeechServiceImpl(SpeechServiceProperties props, RestTemplateBuilder builder) {
         this.props = props;
         this.restTemplate = builder
-                .connectTimeout(Duration.ofSeconds(10))
-                .readTimeout(Duration.ofSeconds(props.getTimeoutSeconds()))
+                .setConnectTimeout(Duration.ofSeconds(10))
+                .setReadTimeout(Duration.ofSeconds(props.getTimeoutSeconds()))
                 .build();
     }
 
