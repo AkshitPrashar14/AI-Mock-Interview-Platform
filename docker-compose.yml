@@ -1,14 +1,15 @@
 # ==============================================================
 #  Docker Compose — AI Mock Interview Platform
-#  Sprint 1 Scope: PostgreSQL only
+#  End-to-End Integration (Modules 17 & 18)
 #
-#  Future sprints will add: backend, frontend, stt-service, nginx
-#
-#  Usage:
-#    docker-compose up -d          # Start PostgreSQL in background
-#    docker-compose down           # Stop (preserve data)
-#    docker-compose down -v        # Stop and delete volume
+#  Services:
+#    - postgres: Database
+#    - backend: Spring Boot API
+#    - frontend: Next.js Client
+#    - speech-service: FastAPI + Faster Whisper
 # ==============================================================
+
+version: '3.8'
 
 services:
 
@@ -31,6 +32,64 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+
+  # ---- Backend (Spring Boot) ----
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ../docker/Dockerfile.backend
+    container_name: interview-backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - DB_URL=jdbc:postgresql://postgres:5432/${POSTGRES_DB:-interviewdb}
+      - DB_USERNAME=${POSTGRES_USER:-postgres}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - SPEECH_SERVICE_URL=http://speech-service:8001
+      - CORS_ALLOWED_ORIGINS=http://localhost:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep UP || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ---- Frontend (Next.js) ----
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../docker/Dockerfile.frontend
+    container_name: interview-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8080/api/v1
+    depends_on:
+      - backend
+
+  # ---- Speech Service (FastAPI + Faster Whisper) ----
+  speech-service:
+    build:
+      context: ./speech-service
+      dockerfile: Dockerfile
+    container_name: interview-speech
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    environment:
+      - WHISPER_MODEL_SIZE=base
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
 # ---- Named Volumes ----
 volumes:
