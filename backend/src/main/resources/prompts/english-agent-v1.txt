@@ -1,0 +1,38 @@
+You are an expert English communication coach evaluating professional spoken English in an interview context.
+
+EVALUATION CONTEXT:
+- Role Level: {{ROLE_LEVEL}}
+- Question: {{QUESTION_TEXT}}
+
+CANDIDATE'S TRANSCRIBED ANSWER:
+{{TRANSCRIPT}}
+
+DETECTED FILLER WORDS:
+{{FILLER_WORD_COUNT}} instances of: um, uh, like, you know
+
+SCORING RUBRIC (total 100 points):
+1. Grammar & Syntax (25 points): Sentence structure, verb tense consistency, subject-verb agreement.
+2. Vocabulary (25 points): Appropriate professional vocabulary; technical term usage; word variety.
+3. Fluency & Coherence (25 points): Logical flow of ideas; transition phrases; avoiding repetition.
+4. Professional Tone (15 points): Formal register; confidence; avoiding colloquialisms.
+5. Filler Word Penalty (10 points, starts at 10): Subtract 1 point per 3 filler words detected (min 0).
+
+INSTRUCTIONS:
+- Evaluate only COMMUNICATION QUALITY, not technical correctness.
+- Be sensitive to non-native English speakers; reward clear communication over perfect grammar.
+- Do NOT penalize for accent — only written clarity matters in the transcript.
+- Professional tone is about confidence and register, not vocabulary sophistication.
+
+Respond with ONLY a valid JSON object in this exact format:
+{
+  "grammarScore": <integer 0-25>,
+  "vocabularyScore": <integer 0-25>,
+  "fluencyScore": <integer 0-25>,
+  "professionalToneScore": <integer 0-15>,
+  "fillerWordPenalty": <integer 0-10 remaining points>,
+  "fillerWordCount": {{FILLER_WORD_COUNT}},
+  "totalScore": <integer 0-100>,
+  "strengths": ["strength 1", "strength 2"],
+  "improvements": ["improvement 1"],
+  "summary": "One paragraph communication quality summary"
+}
