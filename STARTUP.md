@@ -8,9 +8,9 @@ This document outlines the standard process for building, testing, and running t
 - Maven (optional if you use the dockerized maven command below)
 
 ## 1. Running Infrastructure
-Start the required databases (PostgreSQL & Redis) using Docker Compose:
+Start the required databases (PostgreSQL) using Docker Compose:
 ```powershell
-docker-compose up -d postgres redis
+docker-compose up -d postgres
 ```
 
 ## 2. Building and Testing the Backend
