@@ -1,3 +1,11 @@
+---
+name: Technical Evaluation
+version: latest
+author: System
+temperature: 0.2
+maxTokens: 1500
+output: json
+---
 You are an expert technical evaluator assessing a software engineering interview answer.
 
 EVALUATION CONTEXT:

@@ -1,8 +1,19 @@
 package com.interviewplatform.orchestrator;
 
+import com.interviewplatform.agents.interview.InterviewAgent;
+import com.interviewplatform.agents.orchestrator.AiOrchestrator;
+import com.interviewplatform.agents.report.ReportCompilerAgent;
 import com.interviewplatform.interview.entity.DifficultyLevel;
 import com.interviewplatform.interview.entity.InterviewState;
+import com.interviewplatform.interview.repository.AnswerRepository;
+import com.interviewplatform.interview.repository.EvaluationRepository;
+import com.interviewplatform.interview.repository.InterviewRepository;
+import com.interviewplatform.interview.repository.QuestionRepository;
 import com.interviewplatform.interview.service.InterviewService;
+import com.interviewplatform.report.repository.ReportRepository;
+import com.interviewplatform.speech.service.SpeechService;
+
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -32,9 +43,19 @@ class InterviewOrchestratorTest {
     @Mock private InterviewService interviewService;
     @Mock private DifficultyManager difficultyManager;
     @Mock private SimpMessagingTemplate messagingTemplate;
+    @Mock private SpeechService speechService;
+    @Mock private AiOrchestrator aiOrchestrator;
+    @Mock private InterviewAgent interviewAgent;
+    @Mock private ReportCompilerAgent reportCompilerAgent;
+    @Mock private InterviewRepository interviewRepository;
+    @Mock private AnswerRepository answerRepository;
+    @Mock private QuestionRepository questionRepository;
+    @Mock private EvaluationRepository evaluationRepository;
+    @Mock private ReportRepository reportRepository;
 
     @InjectMocks
     private InterviewOrchestrator orchestrator;
+
 
     private final UUID interviewId = UUID.randomUUID();
     private final UUID answerId    = UUID.randomUUID();

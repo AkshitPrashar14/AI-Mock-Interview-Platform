@@ -1,17 +1,20 @@
 package com.interviewplatform.agents.behavioral;
 
 import com.interviewplatform.agents.common.Agent;
-import com.interviewplatform.agents.common.AgentResult;
+import com.interviewplatform.agents.common.AgentExecutionResult;
 import com.interviewplatform.agents.common.InterviewContext;
-import com.interviewplatform.agents.common.PromptBuilder;
-import com.interviewplatform.agents.common.ResponseParser;
-import com.interviewplatform.ai.provider.LlmProviderFactory;
+import com.interviewplatform.ai.prompt.Prompt;
+import com.interviewplatform.ai.prompt.PromptLoader;
+import com.interviewplatform.ai.provider.LlmRequest;
+import com.interviewplatform.ai.provider.AgentType;
+import com.interviewplatform.ai.provider.orchestration.LlmOrchestrator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.regex.Pattern;
 
 /**
@@ -36,7 +39,7 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class BehavioralAgent implements Agent {
 
-    private static final String TEMPLATE   = "behavioral-agent-v1.txt";
+    private static final String TEMPLATE   = "evaluation.md";
     private static final String AGENT_NAME = "BehavioralAgent";
 
     // STAR keyword heuristics (lightweight detection)
@@ -53,9 +56,8 @@ public class BehavioralAgent implements Agent {
             "\\b(result|outcome|achieved|reduced|improved|increased|saved|delivered|as a result|in the end|we managed)\\b",
             Pattern.CASE_INSENSITIVE);
 
-    private final LlmProviderFactory providerFactory;
-    private final PromptBuilder promptBuilder;
-    private final ResponseParser responseParser;
+    private final LlmOrchestrator llmOrchestrator;
+    private final PromptLoader promptLoader;
 
     /**
      * Evaluates a candidate's answer for behavioral competencies.
@@ -65,7 +67,7 @@ public class BehavioralAgent implements Agent {
      */
     @Override
     @SuppressWarnings("unchecked")
-    public AgentResult execute(InterviewContext context) {
+    public AgentExecutionResult<?> execute(InterviewContext context) {
         log.info("{}: evaluating answer for interview={}", AGENT_NAME, context.getInterview().getId());
 
         String transcript = orEmpty(context.getTranscript());
@@ -75,8 +77,9 @@ public class BehavioralAgent implements Agent {
         boolean hasResult    = matches(RESULT_PATTERN, transcript);
 
         try {
-            String systemPrompt = "You are an expert behavioral interviewer. Always respond with valid JSON only.";
-            String userMessage = promptBuilder.build(TEMPLATE, Map.of(
+            Prompt prompt = promptLoader.loadPrompt("behavioral", TEMPLATE);
+
+            String userMessage = promptLoader.buildContent(prompt, Map.of(
                     "ROLE_LEVEL",     orEmpty(context.getInterview().getRoleLevel() != null ? context.getInterview().getRoleLevel().name() : ""),
                     "QUESTION_TEXT",  orEmpty(context.getCurrentQuestion() != null ? context.getCurrentQuestion().getQuestionText() : ""),
                     "QUESTION_TYPE",  orEmpty(context.getCurrentQuestion() != null && context.getCurrentQuestion().getQuestionType() != null ? context.getCurrentQuestion().getQuestionType().name() : ""),
@@ -87,39 +90,35 @@ public class BehavioralAgent implements Agent {
                     "HAS_RESULT",     String.valueOf(hasResult)
             ));
 
-            String rawJson = providerFactory.getProvider()
-                    .chatStructured(systemPrompt, userMessage, "BehavioralEvaluationResult");
-
-            Map<String, Object> parsed = responseParser.parse(rawJson);
-
-            int confidence    = responseParser.getInt(parsed, "confidenceScore", 15);
-            int leadership    = responseParser.getInt(parsed, "leadershipScore", 12);
-            int ownership     = responseParser.getInt(parsed, "ownershipScore", 12);
-            int decision      = responseParser.getInt(parsed, "decisionMakingScore", 12);
-            int professionalism = responseParser.getInt(parsed, "professionalismScore", 9);
-            boolean starComplete = Boolean.TRUE.equals(parsed.get("starComplete"));
-            int total         = responseParser.getInt(parsed, "totalScore",
-                                    confidence + leadership + ownership + decision + professionalism);
-
-            BehavioralEvaluationResult behResult = BehavioralEvaluationResult.builder()
-                    .confidenceScore(confidence)
-                    .leadershipScore(leadership)
-                    .ownershipScore(ownership)
-                    .decisionMakingScore(decision)
-                    .professionalismScore(professionalism)
-                    .starComplete(starComplete)
-                    .totalScore(Math.min(100, total))
-                    .strengths((List<String>) parsed.getOrDefault("strengths", List.of()))
-                    .improvements((List<String>) parsed.getOrDefault("improvements", List.of()))
-                    .summary(responseParser.getString(parsed, "summary", "Behavioral evaluation completed."))
-                    .success(true)
+            LlmRequest llmRequest = LlmRequest.builder()
+                    .agentType(AgentType.BEHAVIORAL)
+                    .systemPrompt(userMessage)
+                    .userMessage("Evaluate the behavioral answer.")
+                    .schemaHint("BehavioralEvaluationResult")
+                    .interviewId(context.getInterview().getId())
+                    .requestId(java.util.UUID.randomUUID().toString())
+                    .traceId(java.util.UUID.randomUUID().toString())
+                    .promptVersion(prompt.getVersion())
+                    .temperature(prompt.getTemperature())
+                    .maxTokens(prompt.getMaxTokens())
                     .build();
+
+            AgentExecutionResult<BehavioralEvaluationResult> executionResult = llmOrchestrator.execute(llmRequest, BehavioralEvaluationResult.class);
+
+            if (executionResult.isSuccess()) {
+                BehavioralEvaluationResult behResult = executionResult.getResult();
+                behResult.setSuccess(true);
+            }
             
-            return AgentResult.success(AGENT_NAME, null, behResult.getTotalScore(), behResult.getSummary());
+            return executionResult;
 
         } catch (Exception ex) {
             log.error("{}: evaluation failed: {}", AGENT_NAME, ex.getMessage(), ex);
-            return AgentResult.failure(AGENT_NAME, ex.getMessage());
+            return AgentExecutionResult.<BehavioralEvaluationResult>builder()
+                    .agentType(AgentType.BEHAVIORAL)
+                    .success(false)
+                    .errorMessage(ex.getMessage())
+                    .build();
         }
     }
 

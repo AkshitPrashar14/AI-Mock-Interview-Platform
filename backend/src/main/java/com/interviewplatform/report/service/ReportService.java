@@ -57,8 +57,8 @@ public class ReportService {
                 .metadata(java.util.Map.of("evaluations", java.util.List.of(evaluation)))
                 .build();
 
-        com.interviewplatform.agents.common.AgentResult result = reportCompilerAgent.execute(context);
-        if (!result.isSuccess() || !(result.getPayload() instanceof Report report)) {
+        com.interviewplatform.agents.common.AgentExecutionResult<?> result = reportCompilerAgent.execute(context);
+        if (!result.isSuccess() || !(result.getResult() instanceof Report report)) {
             throw new RuntimeException("Failed to compile report");
         }
 

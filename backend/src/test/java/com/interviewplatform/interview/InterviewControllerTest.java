@@ -11,6 +11,7 @@ import com.interviewplatform.interview.exception.InterviewAlreadyStartedExceptio
 import com.interviewplatform.interview.exception.InterviewNotFoundException;
 import com.interviewplatform.interview.exception.InvalidStateTransitionException;
 import com.interviewplatform.interview.service.InterviewService;
+import com.interviewplatform.orchestrator.InterviewOrchestrator;
 import com.interviewplatform.user.entity.Role;
 import com.interviewplatform.user.entity.User;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,6 +20,8 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -45,6 +48,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <p><b>Module:</b> Module 2 — Interview Session Management</p>
  */
 @WebMvcTest(InterviewController.class)
+@ActiveProfiles("test")
+@TestPropertySource(properties = {
+    "app.jwt.secret=dGVzdC1zZWNyZXQta2V5LXRoYXQtaXMtYXQtbGVhc3QtMjU2LWJpdHMtbG9uZy1mb3ItdGVzdHMhISE=",
+    "app.jwt.issuer=test-platform",
+    "app.jwt.audience=test-clients",
+    "app.jwt.access-token-expiration-ms=900000",
+    "app.jwt.refresh-token-expiration-days=7",
+    "app.jwt.token-version=1"
+})
 @DisplayName("InterviewController")
 class InterviewControllerTest {
 
@@ -52,6 +64,7 @@ class InterviewControllerTest {
     @Autowired ObjectMapper objectMapper;
 
     @MockBean InterviewService interviewService;
+    @MockBean InterviewOrchestrator interviewOrchestrator;
 
     private User principal;
     private UUID candidateId;

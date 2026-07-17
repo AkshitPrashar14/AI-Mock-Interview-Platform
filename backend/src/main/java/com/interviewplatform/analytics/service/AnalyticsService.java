@@ -49,7 +49,7 @@ public class AnalyticsService {
 
         List<Report> allReports = reportRepository.findByInterviewCandidateId(candidateId)
                 .stream()
-                .filter(r -> r.getReportStatus() == ReportStatus.COMPLETED)
+                .filter(r -> r.getReportStatus() == ReportStatus.READY)
                 .toList();
 
         AnalyticsSnapshot snapshot = snapshotRepository.findByCandidateId(candidateId)

@@ -3,7 +3,7 @@ package com.interviewplatform.agents.orchestrator;
 import com.interviewplatform.agents.aggregator.AggregatedEvaluation;
 import com.interviewplatform.agents.aggregator.EvaluationAggregator;
 import com.interviewplatform.agents.behavioral.BehavioralAgent;
-import com.interviewplatform.agents.common.AgentResult;
+import com.interviewplatform.agents.common.AgentExecutionResult;
 import com.interviewplatform.agents.common.InterviewContext;
 import com.interviewplatform.agents.english.EnglishAgent;
 import com.interviewplatform.agents.technical.TechnicalAgent;
@@ -59,15 +59,15 @@ public class AiOrchestrator {
         log.info("AiOrchestrator: parallel evaluation started for answer");
         long start = System.currentTimeMillis();
 
-        CompletableFuture<AgentResult> techFuture = CompletableFuture.supplyAsync(
+        CompletableFuture<AgentExecutionResult<?>> techFuture = CompletableFuture.supplyAsync(
                 () -> safeEvaluate("TechnicalAgent", () -> technicalAgent.execute(context)),
                 virtualThreadExecutor);
 
-        CompletableFuture<AgentResult> engFuture = CompletableFuture.supplyAsync(
+        CompletableFuture<AgentExecutionResult<?>> engFuture = CompletableFuture.supplyAsync(
                 () -> safeEvaluate("EnglishAgent", () -> englishAgent.execute(context)),
                 virtualThreadExecutor);
 
-        CompletableFuture<AgentResult> behFuture = CompletableFuture.supplyAsync(
+        CompletableFuture<AgentExecutionResult<?>> behFuture = CompletableFuture.supplyAsync(
                 () -> safeEvaluate("BehavioralAgent", () -> behavioralAgent.execute(context)),
                 virtualThreadExecutor);
 
@@ -84,13 +84,12 @@ public class AiOrchestrator {
             log.error("AiOrchestrator: unexpected execution error", ex);
         }
 
-        AgentResult techResult = getOrNeutral(techFuture, "TechnicalAgent");
-        AgentResult engResult  = getOrNeutral(engFuture,  "EnglishAgent");
-        AgentResult behResult  = getOrNeutral(behFuture,  "BehavioralAgent");
+        AgentExecutionResult<?> techResult = getOrNeutral(techFuture, "TechnicalAgent");
+        AgentExecutionResult<?> engResult  = getOrNeutral(engFuture,  "EnglishAgent");
+        AgentExecutionResult<?> behResult  = getOrNeutral(behFuture,  "BehavioralAgent");
 
         long elapsed = System.currentTimeMillis() - start;
-        log.info("AiOrchestrator: evaluation complete in {}ms — tech={} eng={} beh={}",
-                elapsed, techResult.getScore(), engResult.getScore(), behResult.getScore());
+        log.info("AiOrchestrator: evaluation complete in {}ms", elapsed);
 
         return aggregator.aggregate(techResult, engResult, behResult);
     }
@@ -99,21 +98,21 @@ public class AiOrchestrator {
     // Private helpers
     // =========================================================================
 
-    private AgentResult safeEvaluate(String agentName, java.util.function.Supplier<AgentResult> supplier) {
+    private AgentExecutionResult<?> safeEvaluate(String agentName, java.util.function.Supplier<AgentExecutionResult<?>> supplier) {
         try {
             return supplier.get();
         } catch (Exception ex) {
             log.error("AiOrchestrator: {} threw exception: {}", agentName, ex.getMessage(), ex);
-            return AgentResult.failure(agentName, ex.getMessage());
+            return AgentExecutionResult.builder().success(false).errorMessage(ex.getMessage()).build();
         }
     }
 
-    private AgentResult getOrNeutral(CompletableFuture<AgentResult> future, String agentName) {
+    private AgentExecutionResult<?> getOrNeutral(CompletableFuture<AgentExecutionResult<?>> future, String agentName) {
         try {
-            return future.getNow(AgentResult.failure(agentName, "Did not complete within timeout"));
+            return future.getNow(AgentExecutionResult.builder().success(false).errorMessage("Did not complete within timeout").build());
         } catch (Exception ex) {
             log.warn("AiOrchestrator: could not get result for {}: {}", agentName, ex.getMessage());
-            return AgentResult.failure(agentName, ex.getMessage());
+            return AgentExecutionResult.builder().success(false).errorMessage(ex.getMessage()).build();
         }
     }
 }

@@ -1,10 +1,15 @@
 package com.interviewplatform.ai.provider;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.interviewplatform.ai.config.AiConfig;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
+import org.springframework.web.client.RestTemplate;
+
+import java.time.Duration;
 
 /**
  * Factory that resolves the active {@link LlmProvider} at runtime.
@@ -28,25 +33,25 @@ public class LlmProviderFactory {
 
     private final AiConfig aiConfig;
     private final GeminiLlmProvider geminiLlmProvider;
+    private final RestTemplateBuilder restTemplateBuilder;
+    private final ObjectMapper objectMapper;
 
     /**
-     * Returns the active {@link LlmProvider} based on configuration.
+     * Returns the active {@link LlmProvider} based on configuration and agent type.
      *
-     * <p>If the primary provider is unavailable and a fallback is configured,
-     * the fallback provider is returned instead.</p>
-     *
+     * @param agentType the type of the agent requesting the provider
      * @return the configured LLM provider
      * @throws LlmProviderException if no provider is available
      */
-    public LlmProvider getProvider() {
+    public LlmProvider getProvider(AgentType agentType) {
         String primary = aiConfig.getProvider();
-        LlmProvider provider = resolveProvider(primary);
+        LlmProvider provider = resolveProvider(primary, agentType);
 
         if (provider == null || !provider.isAvailable()) {
             String fallback = aiConfig.getFallbackProvider();
             if (StringUtils.hasText(fallback)) {
                 log.warn("Primary provider '{}' unavailable, falling back to '{}'", primary, fallback);
-                provider = resolveProvider(fallback);
+                provider = resolveProvider(fallback, agentType);
             }
         }
 
@@ -57,21 +62,38 @@ public class LlmProviderFactory {
                     "No LLM provider is available. Check GEMINI_API_KEY or OPENROUTER_API_KEY environment variables.");
         }
 
-        log.debug("LlmProviderFactory: using provider={}", provider.getModelName());
+        log.debug("LlmProviderFactory: using provider={}, model={}", provider.getClass().getSimpleName(), provider.getModelName());
         return provider;
+    }
+
+    /**
+     * Backward-compatible default provider resolver.
+     */
+    public LlmProvider getProvider() {
+        return getProvider(null);
     }
 
     // =========================================================================
     // Private
     // =========================================================================
 
-    private LlmProvider resolveProvider(String providerName) {
+    private LlmProvider resolveProvider(String providerName, AgentType agentType) {
         if (!StringUtils.hasText(providerName)) {
             return null;
         }
         return switch (providerName.toLowerCase()) {
             case "gemini" -> geminiLlmProvider;
-            // OpenRouter provider will be added in a future PR if needed
+            case "openrouter" -> {
+                String modelName = aiConfig.getOpenRouter().getModel();
+                if (agentType != null && aiConfig.getOpenRouter().getAgentModels().containsKey(agentType)) {
+                    modelName = aiConfig.getOpenRouter().getAgentModels().get(agentType);
+                }
+                RestTemplate restTemplate = restTemplateBuilder
+                        .setConnectTimeout(Duration.ofSeconds(15))
+                        .setReadTimeout(Duration.ofSeconds(aiConfig.getOpenRouter().getTimeoutSeconds()))
+                        .build();
+                yield new OpenRouterLlmProvider(aiConfig.getOpenRouter(), modelName, restTemplate, objectMapper);
+            }
             default -> {
                 log.warn("Unknown provider name: '{}', defaulting to Gemini", providerName);
                 yield geminiLlmProvider;

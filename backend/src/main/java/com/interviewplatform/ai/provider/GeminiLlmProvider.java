@@ -41,8 +41,8 @@ public class GeminiLlmProvider implements LlmProvider {
         this.config = aiConfig.getGemini();
         this.objectMapper = objectMapper;
         this.restTemplate = builder
-                .connectTimeout(Duration.ofSeconds(15))
-                .readTimeout(Duration.ofSeconds(config.getTimeoutSeconds()))
+                .setConnectTimeout(Duration.ofSeconds(15))
+                .setReadTimeout(Duration.ofSeconds(config.getTimeoutSeconds()))
                 .build();
     }
 
@@ -51,41 +51,42 @@ public class GeminiLlmProvider implements LlmProvider {
     // =========================================================================
 
     @Override
-    public String chat(String systemPrompt, String userMessage) {
-        log.debug("Gemini.chat: model={}, userLen={}", config.getModel(), userMessage.length());
-        Map<String, Object> requestBody = buildRequestBody(systemPrompt, userMessage, null);
-        return callApi(requestBody);
+    public String generateText(LlmRequest request) {
+        long startTime = System.currentTimeMillis();
+        String model = getModelName();
+        log.debug("Gemini.generateText: agent={}, model={}, interviewId={}, requestId={}",
+                request.getAgentType(), model, request.getInterviewId(), request.getRequestId());
+
+        try {
+            Map<String, Object> requestBody = buildRequestBody(request.getSystemPrompt(), request.getUserMessage(), null);
+            String response = callApi(requestBody);
+            logObservability(request, model, startTime, true, null);
+            return response;
+        } catch (Exception e) {
+            logObservability(request, model, startTime, false, e.getMessage());
+            throw e;
+        }
     }
 
     @Override
-    public String chatStructured(String systemPrompt, String userMessage, String schemaHint) {
-        log.debug("Gemini.chatStructured: model={}", config.getModel());
-        Map<String, Object> requestBody = buildRequestBody(systemPrompt, userMessage, schemaHint);
-        return callApi(requestBody);
+    public String generateJson(LlmRequest request) {
+        long startTime = System.currentTimeMillis();
+        String model = getModelName();
+        log.debug("Gemini.generateJson: agent={}, model={}, interviewId={}, requestId={}",
+                request.getAgentType(), model, request.getInterviewId(), request.getRequestId());
+
+        try {
+            Map<String, Object> requestBody = buildRequestBody(request.getSystemPrompt(), request.getUserMessage(), request.getSchemaHint());
+            String response = callApi(requestBody);
+            logObservability(request, model, startTime, true, null);
+            return response;
+        } catch (Exception e) {
+            logObservability(request, model, startTime, false, e.getMessage());
+            throw e;
+        }
     }
 
-    @Override
-    public String chatWithHistory(List<Map<String, String>> messages) {
-        log.debug("Gemini.chatWithHistory: turns={}", messages.size());
 
-        // Gemini uses "user" and "model" roles
-        List<Map<String, Object>> contents = messages.stream()
-                .map(m -> {
-                    String role = "assistant".equals(m.get("role")) ? "model" : "user";
-                    return Map.<String, Object>of(
-                            "role", role,
-                            "parts", List.of(Map.of("text", m.get("content")))
-                    );
-                })
-                .toList();
-
-        Map<String, Object> requestBody = Map.of(
-                "contents", contents,
-                "generationConfig", buildGenerationConfig(null)
-        );
-
-        return callApi(requestBody);
-    }
 
     @Override
     public String getModelName() {
@@ -101,6 +102,15 @@ public class GeminiLlmProvider implements LlmProvider {
     // =========================================================================
     // Private helpers
     // =========================================================================
+
+    private void logObservability(LlmRequest request, String model, long startTime, boolean success, String error) {
+        long latency = System.currentTimeMillis() - startTime;
+        String status = success ? "SUCCESS" : "FAILED";
+        // Note: Gemini REST API currently doesn't easily return token usage in the simple response format we parse
+        // without a larger response mapping. For observability, we log what we have.
+        log.info("LLM_OBSERVABILITY | Provider=Gemini | Agent={} | Model={} | Latency={}ms | Tokens=N/A | Status={} | InterviewId={} | RequestId={} | Error={}",
+                request.getAgentType(), model, latency, status, request.getInterviewId(), request.getRequestId(), error != null ? error : "none");
+    }
 
     private Map<String, Object> buildRequestBody(String systemPrompt, String userMessage,
                                                   String schemaHint) {

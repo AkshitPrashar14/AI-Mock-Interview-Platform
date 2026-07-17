@@ -1,17 +1,20 @@
 package com.interviewplatform.agents.english;
 
 import com.interviewplatform.agents.common.Agent;
-import com.interviewplatform.agents.common.AgentResult;
+import com.interviewplatform.agents.common.AgentExecutionResult;
 import com.interviewplatform.agents.common.InterviewContext;
-import com.interviewplatform.agents.common.PromptBuilder;
-import com.interviewplatform.agents.common.ResponseParser;
-import com.interviewplatform.ai.provider.LlmProviderFactory;
+import com.interviewplatform.ai.prompt.Prompt;
+import com.interviewplatform.ai.prompt.PromptLoader;
+import com.interviewplatform.ai.provider.LlmRequest;
+import com.interviewplatform.ai.provider.AgentType;
+import com.interviewplatform.ai.provider.orchestration.LlmOrchestrator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.regex.Pattern;
 
 /**
@@ -37,16 +40,15 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class EnglishAgent implements Agent {
 
-    private static final String TEMPLATE   = "english-agent-v1.txt";
+    private static final String TEMPLATE   = "evaluation.md";
     private static final String AGENT_NAME = "EnglishAgent";
 
     /** Filler words to detect — case insensitive, word-boundary matched. */
     private static final Pattern FILLER_PATTERN =
             Pattern.compile("\\b(um|uh|like|you know)\\b", Pattern.CASE_INSENSITIVE);
 
-    private final LlmProviderFactory providerFactory;
-    private final PromptBuilder promptBuilder;
-    private final ResponseParser responseParser;
+    private final LlmOrchestrator llmOrchestrator;
+    private final PromptLoader promptLoader;
 
     /**
      * Evaluates a candidate's answer for English communication quality.
@@ -56,53 +58,50 @@ public class EnglishAgent implements Agent {
      */
     @Override
     @SuppressWarnings("unchecked")
-    public AgentResult execute(InterviewContext context) {
+    public AgentExecutionResult<?> execute(InterviewContext context) {
         log.info("{}: evaluating answer for interview={}", AGENT_NAME, context.getInterview().getId());
 
         int fillerCount = countFillerWords(context.getTranscript());
 
         try {
-            String systemPrompt = "You are an expert English communication coach. Always respond with valid JSON only.";
-            String userMessage = promptBuilder.build(TEMPLATE, Map.of(
+            Prompt prompt = promptLoader.loadPrompt("english", TEMPLATE);
+
+            String userMessage = promptLoader.buildContent(prompt, Map.of(
                     "ROLE_LEVEL",         orEmpty(context.getInterview().getRoleLevel() != null ? context.getInterview().getRoleLevel().name() : ""),
                     "QUESTION_TEXT",      orEmpty(context.getCurrentQuestion() != null ? context.getCurrentQuestion().getQuestionText() : ""),
                     "TRANSCRIPT",         orEmpty(context.getTranscript()),
                     "FILLER_WORD_COUNT",  String.valueOf(fillerCount)
             ));
 
-            String rawJson = providerFactory.getProvider()
-                    .chatStructured(systemPrompt, userMessage, "EnglishEvaluationResult");
-
-            Map<String, Object> parsed = responseParser.parse(rawJson);
-
-            int grammar       = responseParser.getInt(parsed, "grammarScore", 18);
-            int vocabulary    = responseParser.getInt(parsed, "vocabularyScore", 18);
-            int fluency       = responseParser.getInt(parsed, "fluencyScore", 18);
-            int profTone      = responseParser.getInt(parsed, "professionalToneScore", 10);
-            int fillerRemaining = responseParser.getInt(parsed, "fillerWordPenalty",
-                                      Math.max(0, 10 - fillerCount / 3));
-            int total         = responseParser.getInt(parsed, "totalScore",
-                                    grammar + vocabulary + fluency + profTone + fillerRemaining);
-
-            EnglishEvaluationResult engResult = EnglishEvaluationResult.builder()
-                    .grammarScore(grammar)
-                    .vocabularyScore(vocabulary)
-                    .fluencyScore(fluency)
-                    .professionalToneScore(profTone)
-                    .fillerWordPenalty(fillerRemaining)
-                    .fillerWordCount(fillerCount)
-                    .totalScore(Math.min(100, total))
-                    .strengths((List<String>) parsed.getOrDefault("strengths", List.of()))
-                    .improvements((List<String>) parsed.getOrDefault("improvements", List.of()))
-                    .summary(responseParser.getString(parsed, "summary", "Communication evaluation completed."))
-                    .success(true)
+            LlmRequest llmRequest = LlmRequest.builder()
+                    .agentType(AgentType.ENGLISH)
+                    .systemPrompt(userMessage)
+                    .userMessage("Evaluate the English communication.")
+                    .schemaHint("EnglishEvaluationResult")
+                    .interviewId(context.getInterview().getId())
+                    .requestId(java.util.UUID.randomUUID().toString())
+                    .traceId(java.util.UUID.randomUUID().toString())
+                    .promptVersion(prompt.getVersion())
+                    .temperature(prompt.getTemperature())
+                    .maxTokens(prompt.getMaxTokens())
                     .build();
+
+            AgentExecutionResult<EnglishEvaluationResult> executionResult = llmOrchestrator.execute(llmRequest, EnglishEvaluationResult.class);
+
+            if (executionResult.isSuccess()) {
+                EnglishEvaluationResult engResult = executionResult.getResult();
+                engResult.setSuccess(true);
+            }
             
-            return AgentResult.success(AGENT_NAME, null, engResult.getTotalScore(), engResult.getSummary());
+            return executionResult;
 
         } catch (Exception ex) {
             log.error("{}: evaluation failed: {}", AGENT_NAME, ex.getMessage(), ex);
-            return AgentResult.failure(AGENT_NAME, ex.getMessage());
+            return AgentExecutionResult.<EnglishEvaluationResult>builder()
+                    .agentType(AgentType.ENGLISH)
+                    .success(false)
+                    .errorMessage(ex.getMessage())
+                    .build();
         }
     }
 

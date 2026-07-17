@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p><b>Sprint 2 — Authentication & User Management</b></p>
  */
 @DataJpaTest
-@ActiveProfiles("dev")
+@ActiveProfiles("test")
 @DisplayName("UserRepository Slice Tests")
 class UserRepositoryTest {
 

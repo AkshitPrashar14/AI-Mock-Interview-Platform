@@ -19,7 +19,7 @@ import java.util.UUID;
 @Schema(description = "Condensed interview summary for list views")
 public class InterviewSummaryResponse {
 
-    private UUID id;
+    private UUID interviewId;
     private String domain;
     private RoleLevel roleLevel;
     private InterviewState state;

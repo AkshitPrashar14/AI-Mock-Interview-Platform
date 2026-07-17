@@ -2,11 +2,13 @@ package com.interviewplatform.agents.report;
 
 import com.interviewplatform.agents.aggregator.AggregatedEvaluation;
 import com.interviewplatform.agents.common.Agent;
-import com.interviewplatform.agents.common.AgentResult;
+import com.interviewplatform.agents.common.AgentExecutionResult;
 import com.interviewplatform.agents.common.InterviewContext;
-import com.interviewplatform.agents.common.PromptBuilder;
-import com.interviewplatform.agents.common.ResponseParser;
-import com.interviewplatform.ai.provider.LlmProviderFactory;
+import com.interviewplatform.ai.prompt.Prompt;
+import com.interviewplatform.ai.prompt.PromptLoader;
+import com.interviewplatform.ai.provider.LlmRequest;
+import com.interviewplatform.ai.provider.AgentType;
+import com.interviewplatform.ai.provider.orchestration.LlmOrchestrator;
 import com.interviewplatform.interview.entity.Evaluation;
 import com.interviewplatform.interview.entity.Interview;
 import com.interviewplatform.interview.entity.PerformanceTier;
@@ -22,6 +24,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Report Compiler Agent — generates the final interview assessment report.
@@ -41,12 +44,11 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class ReportCompilerAgent implements Agent {
 
-    private static final String TEMPLATE   = "report-compiler-v1.txt";
+    private static final String TEMPLATE   = "generation.md";
     private static final String AGENT_NAME = "ReportCompilerAgent";
 
-    private final LlmProviderFactory providerFactory;
-    private final PromptBuilder promptBuilder;
-    private final ResponseParser responseParser;
+    private final LlmOrchestrator llmOrchestrator;
+    private final PromptLoader promptLoader;
     private final ObjectMapper objectMapper;
     private final ReportAggregator reportAggregator;
 
@@ -58,7 +60,7 @@ public class ReportCompilerAgent implements Agent {
      */
     @Override
     @SuppressWarnings("unchecked")
-    public AgentResult execute(InterviewContext context) {
+    public AgentExecutionResult<?> execute(InterviewContext context) {
         Interview interview = context.getInterview();
         log.info("{}: compiling report for interviewId={}", AGENT_NAME, interview.getId());
 
@@ -84,49 +86,74 @@ public class ReportCompilerAgent implements Agent {
 
         // ── 3. Call LLM for narrative generation ─────────────────────────────
         try {
-            String systemPrompt = "You are a senior hiring manager. Always respond with valid JSON only.";
-            String userMessage = promptBuilder.build(TEMPLATE, Map.of(
-                    "INTERVIEW_ID",       interview.getId().toString(),
-                    "DOMAIN",             orEmpty(interview.getDomain()),
-                    "ROLE_LEVEL",         interview.getRoleLevel() != null
-                                              ? interview.getRoleLevel().name() : "N/A",
-                    "TOTAL_QUESTIONS",    String.valueOf(interview.getTotalQuestions()),
-                    "INTERVIEW_DATE",     interview.getCompletedAt() != null
-                                              ? interview.getCompletedAt().toString() : Instant.now().toString(),
-                    "TECHNICAL_SCORE",    String.valueOf(evaluation.getTechnicalScore()),
-                    "ENGLISH_SCORE",      String.valueOf(evaluation.getEnglishScore()),
-                    "BEHAVIORAL_SCORE",   String.valueOf(evaluation.getBehavioralScore()),
-                    "COMPOSITE_SCORE",    String.valueOf(evaluation.getCompositeScore()),
-                    "PERFORMANCE_TIER",   tier.name(),
-                    "VERDICT",            verdict.name(),
-                    "TECHNICAL_SUMMARY",  orEmpty(evaluation.getTechnicalSummary()),
-                    "ENGLISH_SUMMARY",    orEmpty(evaluation.getEnglishSummary()),
-                    "BEHAVIORAL_SUMMARY", orEmpty(evaluation.getBehavioralSummary())
+            Prompt prompt = promptLoader.loadPrompt("report", TEMPLATE);
+
+            String userMessage = promptLoader.buildContent(prompt, Map.ofEntries(
+                    Map.entry("INTERVIEW_ID",       interview.getId().toString()),
+                    Map.entry("DOMAIN",             orEmpty(interview.getDomain())),
+                    Map.entry("ROLE_LEVEL",         interview.getRoleLevel() != null
+                                              ? interview.getRoleLevel().name() : "N/A"),
+                    Map.entry("TOTAL_QUESTIONS",    String.valueOf(interview.getTotalQuestions())),
+                    Map.entry("INTERVIEW_DATE",     interview.getCompletedAt() != null
+                                              ? interview.getCompletedAt().toString() : Instant.now().toString()),
+                    Map.entry("TECHNICAL_SCORE",    String.valueOf(evaluation.getTechnicalScore())),
+                    Map.entry("ENGLISH_SCORE",      String.valueOf(evaluation.getEnglishScore())),
+                    Map.entry("BEHAVIORAL_SCORE",   String.valueOf(evaluation.getBehavioralScore())),
+                    Map.entry("COMPOSITE_SCORE",    String.valueOf(evaluation.getCompositeScore())),
+                    Map.entry("PERFORMANCE_TIER",   tier.name()),
+                    Map.entry("VERDICT",            verdict.name()),
+                    Map.entry("TECHNICAL_SUMMARY",  orEmpty(evaluation.getTechnicalSummary())),
+                    Map.entry("ENGLISH_SUMMARY",    orEmpty(evaluation.getEnglishSummary())),
+                    Map.entry("BEHAVIORAL_SUMMARY", orEmpty(evaluation.getBehavioralSummary()))
             ));
 
-            String rawJson = providerFactory.getProvider()
-                    .chatStructured(systemPrompt, userMessage, "ReportNarrative");
+            LlmRequest llmRequest = LlmRequest.builder()
+                    .agentType(AgentType.REPORT)
+                    .systemPrompt(userMessage)
+                    .userMessage("Generate the executive report.")
+                    .schemaHint("ReportNarrative")
+                    .interviewId(interview.getId())
+                    .requestId(java.util.UUID.randomUUID().toString())
+                    .traceId(java.util.UUID.randomUUID().toString())
+                    .promptVersion(prompt.getVersion())
+                    .temperature(prompt.getTemperature())
+                    .maxTokens(prompt.getMaxTokens())
+                    .build();
 
-            Map<String, Object> parsed = responseParser.parse(rawJson);
+            AgentExecutionResult<ReportNarrative> executionResult = llmOrchestrator.execute(llmRequest, ReportNarrative.class);
 
-            report.setExecutiveSummary(responseParser.getString(parsed, "executiveSummary", "Report generated."));
-            report.setStrengthHighlights(toJsonArray(parsed.get("strengths")));
-            report.setImprovementAreas(toJsonArray(parsed.get("improvementAreas")));
-            report.setStudyPlan(toJsonArray(parsed.get("studyPlan")));
+            if (executionResult.isSuccess()) {
+                ReportNarrative narrative = executionResult.getResult();
+                report.setExecutiveSummary(narrative.getExecutiveSummary());
+                report.setStrengthHighlights(toJsonArray(narrative.getStrengths()));
+                report.setImprovementAreas(toJsonArray(narrative.getImprovementAreas()));
+                report.setStudyPlan(toJsonArray(narrative.getStudyPlan()));
 
-            report.setReportStatus(ReportStatus.COMPLETED);
-            report.setGeneratedAt(Instant.now());
+                report.setReportStatus(ReportStatus.READY);
+                report.setGeneratedAt(Instant.now());
 
-            log.info("{}: report compiled — verdict={}, composite={}, tier={}",
-                    AGENT_NAME, verdict, evaluation.getCompositeScore(), tier);
-            
-            return AgentResult.success(AGENT_NAME, report, evaluation.getCompositeScore(), "Report successfully compiled.");
+                log.info("{}: report compiled — verdict={}, composite={}, tier={}",
+                        AGENT_NAME, verdict, evaluation.getCompositeScore(), tier);
+                
+                return AgentExecutionResult.<Report>builder()
+                        .agentType(AgentType.REPORT)
+                        .success(true)
+                        .result(report)
+                        .build();
+            } else {
+                throw new Exception("Narrative generation failed");
+            }
 
         } catch (Exception ex) {
             log.error("{}: narrative generation failed: {}", AGENT_NAME, ex.getMessage(), ex);
             report.setExecutiveSummary("Report generation encountered an error. Scores are accurate.");
             report.setReportStatus(ReportStatus.FAILED);
-            return AgentResult.failure(AGENT_NAME, ex.getMessage());
+            return AgentExecutionResult.<Report>builder()
+                    .agentType(AgentType.REPORT)
+                    .success(false)
+                    .errorMessage(ex.getMessage())
+                    .result(report)
+                    .build();
         }
     }
 

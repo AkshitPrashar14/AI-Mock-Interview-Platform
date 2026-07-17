@@ -1,7 +1,7 @@
 package com.interviewplatform.orchestrator;
 
 import com.interviewplatform.agents.aggregator.AggregatedEvaluation;
-import com.interviewplatform.agents.common.AgentResult;
+import com.interviewplatform.agents.common.AgentExecutionResult;
 import com.interviewplatform.agents.common.InterviewContext;
 import com.interviewplatform.agents.interview.InterviewAgent;
 import com.interviewplatform.agents.interview.QuestionGenerationResult;
@@ -21,8 +21,9 @@ import com.interviewplatform.interview.service.InterviewService;
 import com.interviewplatform.report.entity.Report;
 import com.interviewplatform.report.repository.ReportRepository;
 import com.interviewplatform.speech.dto.TranscriptionResult;
-import com.interviewplatform.speech.dto.TranscriptStatus;
+import com.interviewplatform.interview.entity.TranscriptStatus;
 import com.interviewplatform.speech.service.SpeechService;
+import java.math.BigDecimal;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -100,14 +101,14 @@ public class InterviewOrchestrator {
                 // Invoke real SpeechService
                 TranscriptionResult result = speechService.transcribe(answerId, audioBytes, "webm");
                 
-                if (result.isSuccess()) {
+                if (result.getStatus() != null && result.getStatus().name().equals(TranscriptStatus.VALID.name())) {
                     answer.setTranscript(result.getTranscript());
-                    answer.setTranscriptStatus(TranscriptStatus.COMPLETED);
+                    answer.setTranscriptStatus(TranscriptStatus.VALID);
                     answerRepository.save(answer);
                     
                     handleTranscriptReady(interviewId, answerId, result.getTranscript());
                 } else {
-                    answer.setTranscriptStatus(TranscriptStatus.FAILED);
+                    answer.setTranscriptStatus(TranscriptStatus.INVALID);
                     answerRepository.save(answer);
                     // Handle failure gracefully (e.g., transition to ERROR state)
                     interviewService.transitionState(interviewId, InterviewState.ERROR, "STT_FAILED", result.getErrorMessage());
@@ -154,7 +155,7 @@ public class InterviewOrchestrator {
                         .technicalScore(evalResult.getTechnicalScore())
                         .englishScore(evalResult.getEnglishScore())
                         .behavioralScore(evalResult.getBehavioralScore())
-                        .compositeScore(evalResult.getCompositeScore())
+                        .compositeScore(BigDecimal.valueOf(evalResult.getCompositeScore()))
                         .technicalSummary(evalResult.getTechnicalSummary())
                         .englishSummary(evalResult.getEnglishSummary())
                         .behavioralSummary(evalResult.getBehavioralSummary())
@@ -165,8 +166,8 @@ public class InterviewOrchestrator {
                 Interview interview = context.getInterview();
                 
                 // Get all recent scores
-                List<Integer> recentScores = evaluationRepository.findByAnswerQuestionInterviewOrderByCreatedAtAsc(interview)
-                        .stream().map(Evaluation::getCompositeScore).toList();
+                List<Integer> recentScores = evaluationRepository.findByInterviewIdOrderByEvaluatedAtAsc(interview.getId())
+                        .stream().map(e -> e.getCompositeScore() != null ? e.getCompositeScore().intValue() : 0).toList();
                         
                 int questionNumber = context.getCurrentQuestion().getQuestionNumber();
 
@@ -234,15 +235,15 @@ public class InterviewOrchestrator {
                     InterviewContext context = buildContext(interviewId, null);
                     context.setDifficulty(nextDifficulty); // override for next question
                     
-                    AgentResult result = interviewAgent.execute(context);
+                    AgentExecutionResult<?> result = interviewAgent.execute(context);
                     
-                    if (result.isSuccess() && result.getPayload() instanceof QuestionGenerationResult qResult) {
+                    if (result.isSuccess() && result.getResult() instanceof QuestionGenerationResult qResult) {
                         Question q = Question.builder()
                                 .interview(context.getInterview())
                                 .questionNumber(qResult.getQuestionNumber())
                                 .questionText(qResult.getQuestionText())
                                 .difficulty(DifficultyLevel.valueOf(qResult.getDifficulty()))
-                                .askedAt(Instant.now())
+                                .deliveredAt(Instant.now())
                                 .build();
                                 
                         questionRepository.save(q);
@@ -287,12 +288,12 @@ public class InterviewOrchestrator {
                 InterviewContext context = buildContext(interviewId, null);
                 
                 // Get all evaluations for the report aggregator
-                List<Evaluation> allEvaluations = evaluationRepository.findByAnswerQuestionInterviewOrderByCreatedAtAsc(context.getInterview());
+                List<Evaluation> allEvaluations = evaluationRepository.findByInterviewIdOrderByEvaluatedAtAsc(context.getInterview().getId());
                 context.setMetadata(Map.of("evaluations", allEvaluations));
                 
-                AgentResult result = reportCompilerAgent.execute(context);
+                AgentExecutionResult<?> result = reportCompilerAgent.execute(context);
                 
-                if (result.isSuccess() && result.getPayload() instanceof Report report) {
+                if (result.isSuccess() && result.getResult() instanceof Report report) {
                     reportRepository.save(report);
                     
                     interviewService.transitionState(interviewId, InterviewState.COMPLETED, 
@@ -335,7 +336,7 @@ public class InterviewOrchestrator {
                 .previousQuestions(previousQuestions)
                 .transcript(transcript)
                 .difficulty(currentQuestion != null ? currentQuestion.getDifficulty() : null)
-                .state(interview.getStatus())
+                .state(interview.getState())
                 .metadata(Map.of("totalQuestions", interview.getTotalQuestions()))
                 .build();
     }

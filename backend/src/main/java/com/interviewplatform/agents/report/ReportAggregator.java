@@ -30,7 +30,7 @@ public class ReportAggregator {
             totalTech += eval.getTechnicalScore();
             totalEng += eval.getEnglishScore();
             totalBeh += eval.getBehavioralScore();
-            totalComp += eval.getCompositeScore();
+            totalComp += eval.getCompositeScore() != null ? eval.getCompositeScore().intValue() : 0;
         }
 
         int count = evaluations.size();

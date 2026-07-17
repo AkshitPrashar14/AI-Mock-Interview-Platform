@@ -50,8 +50,8 @@ public class Evaluation {
     @Builder.Default
     private String technicalSubscores = "{}";
 
-    @Column(name = "technical_feedback", columnDefinition = "TEXT")
-    private String technicalFeedback;
+    @Column(name = "technical_summary", columnDefinition = "TEXT")
+    private String technicalSummary;
 
     // ── English Agent Output ──────────────────────────────────────────────────
 
@@ -62,8 +62,8 @@ public class Evaluation {
     @Builder.Default
     private String englishSubscores = "{}";
 
-    @Column(name = "english_feedback", columnDefinition = "TEXT")
-    private String englishFeedback;
+    @Column(name = "english_summary", columnDefinition = "TEXT")
+    private String englishSummary;
 
     // ── Behavioral Agent Output ───────────────────────────────────────────────
 
@@ -74,8 +74,8 @@ public class Evaluation {
     @Builder.Default
     private String behavioralSubscores = "{}";
 
-    @Column(name = "behavioral_feedback", columnDefinition = "TEXT")
-    private String behavioralFeedback;
+    @Column(name = "behavioral_summary", columnDefinition = "TEXT")
+    private String behavioralSummary;
 
     // ── Aggregated Result (pure Java — no LLM) ────────────────────────────────
 

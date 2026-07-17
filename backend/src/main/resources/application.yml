@@ -9,10 +9,13 @@ spring:
     name: ai-mock-interview-platform
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
+  websocket:
+    message-size-limit: 65536       # 64 KB per STOMP message
+    send-buffer-size-limit: 524288  # 512 KB outbound buffer
 
 # --- Server ---
 server:
-  port: ${SERVER_PORT:8080}
+  port: ${SERVER_PORT:8081}
   servlet:
     context-path: /
 
@@ -85,6 +88,12 @@ app:
     open-router:
       api-key: ${OPENROUTER_API_KEY:}
       model: ${OPENROUTER_MODEL:openai/gpt-4o-mini}
+      agent-models:
+        INTERVIEW: ${OPENROUTER_INTERVIEW_MODEL:openai/gpt-oss-120b:free}
+        TECHNICAL: ${OPENROUTER_TECHNICAL_MODEL:openai/gpt-oss-120b:free}
+        ENGLISH: ${OPENROUTER_ENGLISH_MODEL:nvidia/nemotron-3-nano-30b-a3b:free}
+        BEHAVIORAL: ${OPENROUTER_BEHAVIORAL_MODEL:nvidia/nemotron-3-nano-30b-a3b:free}
+        REPORT: ${OPENROUTER_REPORT_MODEL:openai/gpt-oss-120b:free}
       base-url: https://openrouter.ai/api/v1
       timeout-seconds: 60
 
@@ -97,11 +106,7 @@ speech:
     retry-backoff-ms: 2000
     min-transcript-length: 10   # characters — shorter transcripts are marked INVALID
 
-# --- WebSocket (Module 3) ---
-spring:
-  websocket:
-    message-size-limit: 65536       # 64 KB per STOMP message
-    send-buffer-size-limit: 524288  # 512 KB outbound buffer
+# --- WebSocket configuration moved to main spring block above ---
 
 # --- Resilience4j (Module 4) ---
 resilience4j:

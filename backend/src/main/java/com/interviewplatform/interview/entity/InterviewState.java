@@ -31,6 +31,9 @@ public enum InterviewState {
     /** Frontend is actively recording the candidate's audio. */
     LISTENING,
 
+    /** Audio submitted to STT engine; awaiting STT pipeline invocation. */
+    AUDIO_SUBMITTED,
+
     /** Audio submitted to STT engine; awaiting transcription result. */
     TRANSCRIBING,
 

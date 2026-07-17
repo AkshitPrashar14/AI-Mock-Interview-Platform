@@ -1,17 +1,20 @@
 package com.interviewplatform.agents.interview;
 
 import com.interviewplatform.agents.common.Agent;
-import com.interviewplatform.agents.common.AgentResult;
+import com.interviewplatform.agents.common.AgentExecutionResult;
 import com.interviewplatform.agents.common.InterviewContext;
-import com.interviewplatform.agents.common.PromptBuilder;
-import com.interviewplatform.agents.common.ResponseParser;
-import com.interviewplatform.ai.provider.LlmProviderFactory;
+import com.interviewplatform.ai.prompt.Prompt;
+import com.interviewplatform.ai.prompt.PromptLoader;
+import com.interviewplatform.ai.provider.LlmRequest;
+import com.interviewplatform.ai.provider.AgentType;
+import com.interviewplatform.ai.provider.orchestration.LlmOrchestrator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Interview Agent — generates context-aware interview questions.
@@ -34,12 +37,11 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class InterviewAgent implements Agent {
 
-    private static final String TEMPLATE = "interview-agent-v1.txt";
+    private static final String TEMPLATE = "generation.md";
     private static final String AGENT_NAME = "InterviewAgent";
 
-    private final LlmProviderFactory providerFactory;
-    private final PromptBuilder promptBuilder;
-    private final ResponseParser responseParser;
+    private final LlmOrchestrator llmOrchestrator;
+    private final PromptLoader promptLoader;
 
     /**
      * Generates the next interview question for the session.
@@ -49,7 +51,7 @@ public class InterviewAgent implements Agent {
      */
     @Override
     @SuppressWarnings("unchecked")
-    public AgentResult execute(InterviewContext context) {
+    public AgentExecutionResult<?> execute(InterviewContext context) {
         // We will default to 5 total questions if metadata is missing
         int totalQuestions = context.getMetadata() != null && context.getMetadata().containsKey("totalQuestions")
                 ? (int) context.getMetadata().get("totalQuestions") : 5;
@@ -60,8 +62,9 @@ public class InterviewAgent implements Agent {
                   AGENT_NAME, questionNumber, context.getInterview().getId());
 
         try {
-            String systemPrompt = "You are an expert interviewer. Always respond with valid JSON only.";
-            String userMessage = promptBuilder.build(TEMPLATE, Map.of(
+            Prompt prompt = promptLoader.loadPrompt("interview", TEMPLATE);
+            
+            String userMessage = promptLoader.buildContent(prompt, Map.of(
                     "DOMAIN", orEmpty(context.getInterview().getDomain()),
                     "ROLE_LEVEL", orEmpty(context.getInterview().getRoleLevel() != null ? context.getInterview().getRoleLevel().name() : ""),
                     "QUESTION_NUMBER", String.valueOf(questionNumber),
@@ -71,25 +74,29 @@ public class InterviewAgent implements Agent {
                     "CONVERSATION_HISTORY", orEmpty(context.getConversationHistory())
             ));
 
-            String rawJson = providerFactory.getProvider()
-                    .chatStructured(systemPrompt, userMessage, "QuestionGenerationResult");
-
-            Map<String, Object> parsed = responseParser.parse(rawJson);
-
-            List<String> keyPoints = (List<String>) parsed.getOrDefault("expectedKeyPoints", List.of());
-
-            QuestionGenerationResult qResult = QuestionGenerationResult.builder()
+            LlmRequest llmRequest = LlmRequest.builder()
+                    .agentType(AgentType.INTERVIEW)
+                    .systemPrompt(userMessage) // The prompt is just one file for Interview Gen
+                    .userMessage("Generate the question.")
+                    .schemaHint("QuestionGenerationResult")
                     .interviewId(context.getInterview().getId())
-                    .questionNumber(questionNumber)
-                    .questionText(responseParser.getString(parsed, "questionText", "Tell me about yourself."))
-                    .questionType(responseParser.getString(parsed, "questionType", "TECHNICAL"))
-                    .difficulty(responseParser.getString(parsed, "difficulty", context.getDifficulty() != null ? context.getDifficulty().name() : ""))
-                    .rationale(responseParser.getString(parsed, "rationale", ""))
-                    .expectedKeyPoints(keyPoints)
-                    .success(true)
+                    .requestId(UUID.randomUUID().toString())
+                    .promptVersion(prompt.getVersion())
+                    .temperature(prompt.getTemperature())
+                    .maxTokens(prompt.getMaxTokens())
+                    .traceId(UUID.randomUUID().toString())
                     .build();
+
+            AgentExecutionResult<QuestionGenerationResult> executionResult = llmOrchestrator.execute(llmRequest, QuestionGenerationResult.class);
             
-            return AgentResult.success(AGENT_NAME, qResult, 100, "Question generated successfully.");
+            if (executionResult.isSuccess()) {
+                QuestionGenerationResult qResult = executionResult.getResult();
+                qResult.setInterviewId(context.getInterview().getId());
+                qResult.setQuestionNumber(questionNumber);
+                qResult.setSuccess(true);
+            }
+            
+            return executionResult;
 
         } catch (Exception ex) {
             log.error("{}: question generation failed: {}", AGENT_NAME, ex.getMessage(), ex);
@@ -98,12 +105,17 @@ public class InterviewAgent implements Agent {
                     .questionNumber(questionNumber)
                     .success(false)
                     .errorMessage(ex.getMessage())
-                    // Fallback question so the interview can continue
                     .questionText("Can you describe a challenging technical problem you solved recently?")
                     .questionType("TECHNICAL")
                     .difficulty(orEmpty(context.getDifficulty() != null ? context.getDifficulty().name() : ""))
                     .build();
-            return AgentResult.success(AGENT_NAME, fallback, 100, "Fallback question generated.");
+            
+            return AgentExecutionResult.<QuestionGenerationResult>builder()
+                    .agentType(AgentType.INTERVIEW)
+                    .success(false)
+                    .errorMessage(ex.getMessage())
+                    .result(fallback)
+                    .build();
         }
     }
 

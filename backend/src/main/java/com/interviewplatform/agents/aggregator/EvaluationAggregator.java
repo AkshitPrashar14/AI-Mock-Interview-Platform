@@ -1,6 +1,9 @@
 package com.interviewplatform.agents.aggregator;
 
-import com.interviewplatform.agents.common.AgentResult;
+import com.interviewplatform.agents.common.AgentExecutionResult;
+import com.interviewplatform.agents.technical.TechnicalEvaluationResult;
+import com.interviewplatform.agents.english.EnglishEvaluationResult;
+import com.interviewplatform.agents.behavioral.BehavioralEvaluationResult;
 import com.interviewplatform.interview.entity.PerformanceTier;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -44,13 +47,30 @@ public class EvaluationAggregator {
      * @param behavioralResult result from BehavioralAgent
      * @return aggregated evaluation with composite score and performance tier
      */
-    public AggregatedEvaluation aggregate(AgentResult technicalResult,
-                                           AgentResult englishResult,
-                                           AgentResult behavioralResult) {
+    public AggregatedEvaluation aggregate(AgentExecutionResult<?> technicalResult,
+                                           AgentExecutionResult<?> englishResult,
+                                           AgentExecutionResult<?> behavioralResult) {
 
-        int techScore  = technicalResult.isSuccess()  ? technicalResult.getScore()  : 50;
-        int engScore   = englishResult.isSuccess()    ? englishResult.getScore()    : 50;
-        int behScore   = behavioralResult.isSuccess() ? behavioralResult.getScore() : 50;
+        int techScore  = 50;
+        String techSummary = "Evaluation failed";
+        if (technicalResult.isSuccess() && technicalResult.getResult() instanceof TechnicalEvaluationResult t) {
+            techScore = t.getTotalScore();
+            techSummary = t.getSummary();
+        }
+
+        int engScore   = 50;
+        String engSummary = "Evaluation failed";
+        if (englishResult.isSuccess() && englishResult.getResult() instanceof EnglishEvaluationResult e) {
+            engScore = e.getTotalScore();
+            engSummary = e.getSummary();
+        }
+
+        int behScore   = 50;
+        String behSummary = "Evaluation failed";
+        if (behavioralResult.isSuccess() && behavioralResult.getResult() instanceof BehavioralEvaluationResult b) {
+            behScore = b.getTotalScore();
+            behSummary = b.getSummary();
+        }
 
         int composite = (int) Math.round(
                 (techScore  * TECH_WEIGHT)
@@ -75,9 +95,9 @@ public class EvaluationAggregator {
                 .behavioralScore(behScore)
                 .compositeScore(composite)
                 .performanceTier(tier.name())
-                .technicalSummary(technicalResult.getSummary())
-                .englishSummary(englishResult.getSummary())
-                .behavioralSummary(behavioralResult.getSummary())
+                .technicalSummary(techSummary)
+                .englishSummary(engSummary)
+                .behavioralSummary(behSummary)
                 .allAgentsSucceeded(allSucceeded)
                 .build();
     }

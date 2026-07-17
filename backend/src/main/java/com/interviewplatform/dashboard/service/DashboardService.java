@@ -53,7 +53,9 @@ public class DashboardService {
                 .build();
 
         // 2. Fetch Active Interviews (anything not completed or failed)
-        List<InterviewState> inactiveStates = List.of(InterviewState.COMPLETED, InterviewState.FAILED);
+        List<InterviewState> inactiveStates = List.of(
+                InterviewState.COMPLETED, InterviewState.REPORT_GENERATING, 
+                InterviewState.REPORT_GENERATED, InterviewState.ERROR, InterviewState.ABANDONED);
         List<Interview> active = interviewRepository.findByCandidateIdAndStateNotInOrderByCreatedAtDesc(candidateId, inactiveStates);
         List<InterviewSummaryResponse> activeResponses = active.stream()
                 .map(this::toSummaryResponse)
@@ -61,7 +63,7 @@ public class DashboardService {
 
         // 3. Fetch Recent Completed Interviews (limit 5)
         List<Interview> recent = interviewRepository.findByCandidateIdAndStateOrderByCreatedAtDesc(
-                candidateId, InterviewState.COMPLETED, PageRequest.of(0, 5)).getContent();
+                candidateId, InterviewState.REPORT_GENERATED, PageRequest.of(0, 5)).getContent();
         List<InterviewSummaryResponse> recentResponses = recent.stream()
                 .map(this::toSummaryResponse)
                 .collect(Collectors.toList());
@@ -75,7 +77,7 @@ public class DashboardService {
 
     private InterviewSummaryResponse toSummaryResponse(Interview interview) {
         return InterviewSummaryResponse.builder()
-                .id(interview.getId())
+                .interviewId(interview.getId())
                 .domain(interview.getDomain())
                 .roleLevel(interview.getRoleLevel())
                 .state(interview.getState())

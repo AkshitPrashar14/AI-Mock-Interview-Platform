@@ -35,10 +35,13 @@ public final class InterviewStateMachine {
             InterviewState.WAITING_FOR_RESPONSE)),
 
         Map.entry(InterviewState.WAITING_FOR_RESPONSE, Set.of(
-            InterviewState.LISTENING, InterviewState.ABANDONED)),
+            InterviewState.LISTENING, InterviewState.AUDIO_SUBMITTED, InterviewState.ABANDONED)),
 
         Map.entry(InterviewState.LISTENING, Set.of(
-            InterviewState.TRANSCRIBING, InterviewState.WAITING_FOR_RESPONSE)),
+            InterviewState.AUDIO_SUBMITTED, InterviewState.WAITING_FOR_RESPONSE, InterviewState.ABANDONED)),
+
+        Map.entry(InterviewState.AUDIO_SUBMITTED, Set.of(
+            InterviewState.TRANSCRIBING, InterviewState.ERROR)),
 
         Map.entry(InterviewState.TRANSCRIBING, Set.of(
             InterviewState.EVALUATING, InterviewState.WAITING_FOR_RESPONSE,

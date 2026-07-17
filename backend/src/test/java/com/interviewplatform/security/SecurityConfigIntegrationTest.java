@@ -23,7 +23,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureMockMvc
-@ActiveProfiles("dev")
+@ActiveProfiles("test")
 @DisplayName("Security Configuration Integration Tests")
 class SecurityConfigIntegrationTest {
 
@@ -49,9 +49,9 @@ class SecurityConfigIntegrationTest {
     }
 
     @Test
-    @DisplayName("GET /v3/api-docs is accessible without authentication")
+    @DisplayName("GET /api-docs is accessible without authentication")
     void apiDocs_isPublic() throws Exception {
-        mockMvc.perform(get("/v3/api-docs"))
+        mockMvc.perform(get("/api-docs"))
                 .andExpect(status().isOk());
     }
 
@@ -77,7 +77,7 @@ class SecurityConfigIntegrationTest {
 
     @Test
     @DisplayName("Request with malformed Bearer token returns 401")
-    void malformedToken_returns401() throws Exception {
+    void malformedToken_isRejected() throws Exception {
         mockMvc.perform(get("/api/v1/auth/me")
                         .header("Authorization", "Bearer not.a.real.token"))
                 .andExpect(status().isUnauthorized());
@@ -85,7 +85,7 @@ class SecurityConfigIntegrationTest {
 
     @Test
     @DisplayName("Request with 'Bearer ' only (no token) returns 401")
-    void bearerWithNoToken_returns401() throws Exception {
+    void bearerWithNoToken_isRejected() throws Exception {
         mockMvc.perform(get("/api/v1/auth/me")
                         .header("Authorization", "Bearer "))
                 .andExpect(status().isUnauthorized());

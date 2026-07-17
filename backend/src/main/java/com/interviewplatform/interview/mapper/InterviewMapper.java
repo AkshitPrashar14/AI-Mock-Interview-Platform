@@ -24,6 +24,7 @@ public interface InterviewMapper {
     @Mapping(target = "lastEvaluationFeedback", ignore = true)
     InterviewResponse toResponse(Interview interview);
 
+    @Mapping(target = "interviewId", source = "id")
     InterviewSummaryResponse toSummaryResponse(Interview interview);
 
     @AfterMapping
@@ -41,7 +42,10 @@ public interface InterviewMapper {
                     .findFirst()
                     .map(Question::getAnswer)
                     .map(Answer::getEvaluation)
-                    .ifPresent(eval -> builder.lastEvaluationFeedback(eval.getFeedback()));
+                    .ifPresent(eval -> builder.lastEvaluationFeedback(
+                            String.format("Technical: %s | English: %s | Behavioral: %s",
+                                    eval.getTechnicalSummary(), eval.getEnglishSummary(), eval.getBehavioralSummary())
+                    ));
             }
         }
     }

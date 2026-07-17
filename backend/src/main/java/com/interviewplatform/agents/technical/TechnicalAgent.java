@@ -1,17 +1,20 @@
 package com.interviewplatform.agents.technical;
 
 import com.interviewplatform.agents.common.Agent;
-import com.interviewplatform.agents.common.AgentResult;
+import com.interviewplatform.agents.common.AgentExecutionResult;
 import com.interviewplatform.agents.common.InterviewContext;
-import com.interviewplatform.agents.common.PromptBuilder;
-import com.interviewplatform.agents.common.ResponseParser;
-import com.interviewplatform.ai.provider.LlmProviderFactory;
+import com.interviewplatform.ai.prompt.Prompt;
+import com.interviewplatform.ai.prompt.PromptLoader;
+import com.interviewplatform.ai.provider.LlmRequest;
+import com.interviewplatform.ai.provider.AgentType;
+import com.interviewplatform.ai.provider.orchestration.LlmOrchestrator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Technical Evaluation Agent.
@@ -31,12 +34,11 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class TechnicalAgent implements Agent {
 
-    private static final String TEMPLATE   = "technical-agent-v1.txt";
+    private static final String TEMPLATE   = "evaluation.md";
     private static final String AGENT_NAME = "TechnicalAgent";
 
-    private final LlmProviderFactory providerFactory;
-    private final PromptBuilder promptBuilder;
-    private final ResponseParser responseParser;
+    private final LlmOrchestrator llmOrchestrator;
+    private final PromptLoader promptLoader;
 
     /**
      * Evaluates a candidate's answer for technical quality.
@@ -46,12 +48,13 @@ public class TechnicalAgent implements Agent {
      */
     @Override
     @SuppressWarnings("unchecked")
-    public AgentResult execute(InterviewContext context) {
+    public AgentExecutionResult<?> execute(InterviewContext context) {
         log.info("{}: evaluating answer for interview={}", AGENT_NAME, context.getInterview().getId());
 
         try {
-            String systemPrompt = "You are a senior technical interviewer. Always respond with valid JSON only.";
-            String userMessage = promptBuilder.build(TEMPLATE, Map.of(
+            Prompt prompt = promptLoader.loadPrompt("technical", TEMPLATE);
+
+            String userMessage = promptLoader.buildContent(prompt, Map.of(
                     "DOMAIN",        orEmpty(context.getInterview().getDomain()),
                     "ROLE_LEVEL",    orEmpty(context.getInterview().getRoleLevel() != null ? context.getInterview().getRoleLevel().name() : ""),
                     "QUESTION_TEXT", orEmpty(context.getCurrentQuestion() != null ? context.getCurrentQuestion().getQuestionText() : ""),
@@ -60,35 +63,35 @@ public class TechnicalAgent implements Agent {
                     "TRANSCRIPT",    orEmpty(context.getTranscript())
             ));
 
-            String rawJson = providerFactory.getProvider()
-                    .chatStructured(systemPrompt, userMessage, "TechnicalEvaluationResult");
-
-            Map<String, Object> parsed = responseParser.parse(rawJson);
-
-            int correctness   = responseParser.getInt(parsed, "correctnessScore", 20);
-            int depth         = responseParser.getInt(parsed, "depthScore", 15);
-            int problemSolving= responseParser.getInt(parsed, "problemSolvingScore", 10);
-            int completeness  = responseParser.getInt(parsed, "completenessScore", 5);
-            int total         = responseParser.getInt(parsed, "totalScore",
-                                    correctness + depth + problemSolving + completeness);
-
-            TechnicalEvaluationResult techResult = TechnicalEvaluationResult.builder()
-                    .correctnessScore(correctness)
-                    .depthScore(depth)
-                    .problemSolvingScore(problemSolving)
-                    .completenessScore(completeness)
-                    .totalScore(Math.min(100, total))
-                    .strengths((List<String>) parsed.getOrDefault("strengths", List.of()))
-                    .improvements((List<String>) parsed.getOrDefault("improvements", List.of()))
-                    .summary(responseParser.getString(parsed, "summary", "Technical evaluation completed."))
-                    .success(true)
+            LlmRequest llmRequest = LlmRequest.builder()
+                    .agentType(AgentType.TECHNICAL)
+                    .systemPrompt(userMessage)
+                    .userMessage("Evaluate the technical answer.")
+                    .schemaHint("TechnicalEvaluationResult")
+                    .interviewId(context.getInterview().getId())
+                    .requestId(java.util.UUID.randomUUID().toString())
+                    .traceId(java.util.UUID.randomUUID().toString())
+                    .promptVersion(prompt.getVersion())
+                    .temperature(prompt.getTemperature())
+                    .maxTokens(prompt.getMaxTokens())
                     .build();
+
+            AgentExecutionResult<TechnicalEvaluationResult> executionResult = llmOrchestrator.execute(llmRequest, TechnicalEvaluationResult.class);
+
+            if (executionResult.isSuccess()) {
+                TechnicalEvaluationResult techResult = executionResult.getResult();
+                techResult.setSuccess(true);
+            }
             
-            return AgentResult.success(AGENT_NAME, null, techResult.getTotalScore(), techResult.getSummary());
+            return executionResult;
 
         } catch (Exception ex) {
             log.error("{}: evaluation failed: {}", AGENT_NAME, ex.getMessage(), ex);
-            return AgentResult.failure(AGENT_NAME, ex.getMessage());
+            return AgentExecutionResult.<TechnicalEvaluationResult>builder()
+                    .agentType(AgentType.TECHNICAL)
+                    .success(false)
+                    .errorMessage(ex.getMessage())
+                    .build();
         }
     }
 

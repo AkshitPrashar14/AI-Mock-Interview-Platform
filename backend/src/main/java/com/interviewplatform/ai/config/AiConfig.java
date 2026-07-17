@@ -1,8 +1,12 @@
 package com.interviewplatform.ai.config;
 
+import com.interviewplatform.ai.provider.AgentType;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
+
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Typed configuration for the AI provider layer.
@@ -27,6 +31,12 @@ public class AiConfig {
      * Leave blank to disable fallback.
      */
     private String fallbackProvider = "";
+
+    /** Number of times to retry failed LLM responses. */
+    private Integer retryCount = 3;
+
+    /** Base exponential backoff delay in milliseconds. */
+    private Long retryBackoffMs = 250L;
 
     // -------------------------------------------------------------------------
     // Gemini settings
@@ -69,8 +79,11 @@ public class AiConfig {
         /** OpenRouter API key. */
         private String apiKey = "${OPENROUTER_API_KEY:}";
 
-        /** Model to use via OpenRouter (e.g. "openai/gpt-4o"). */
+        /** Default Model to use via OpenRouter if agent routing is bypassed. */
         private String model = "openai/gpt-4o-mini";
+
+        /** Configuration-driven model routing per Agent Type. */
+        private Map<AgentType, String> agentModels = new HashMap<>();
 
         /** Base URL for OpenRouter API. */
         private String baseUrl = "https://openrouter.ai/api/v1";

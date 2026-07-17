@@ -30,7 +30,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureMockMvc
-@ActiveProfiles("dev")
+@ActiveProfiles("test")
 @DisplayName("HealthController Integration Tests")
 class HealthControllerTest {
 

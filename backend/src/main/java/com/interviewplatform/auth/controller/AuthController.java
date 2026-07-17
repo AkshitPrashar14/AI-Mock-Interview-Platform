@@ -185,6 +185,12 @@ public class AuthController {
             @AuthenticationPrincipal User principal,
             HttpServletRequest httpRequest
     ) {
+        if (principal == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(
+                    ApiResponse.error("UNAUTHORIZED", "Authentication required",
+                            httpRequest.getRequestURI(), MDC.get(ApiConstants.MDC_REQUEST_ID_KEY))
+            );
+        }
         UserResponse user = userService.getCurrentUser(principal.getId());
         return ResponseEntity.ok(
                 ApiResponse.success("Current user retrieved", user,

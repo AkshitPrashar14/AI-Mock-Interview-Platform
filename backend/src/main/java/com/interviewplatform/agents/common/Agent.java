@@ -11,5 +11,5 @@ public interface Agent {
      * @param context the current state of the interview
      * @return the result of the agent's execution
      */
-    AgentResult execute(InterviewContext context);
+    AgentExecutionResult<?> execute(InterviewContext context);
 }

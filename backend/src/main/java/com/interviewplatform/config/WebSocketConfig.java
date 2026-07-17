@@ -80,7 +80,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                     if (authHeader != null && authHeader.startsWith("Bearer ")) {
                         String token = authHeader.substring(7);
                         try {
-                            String username = jwtService.extractUsername(token);
+                            String username = jwtService.extractEmail(token);
                             if (username != null && jwtService.isTokenValid(token)) {
                                 var userDetails = userDetailsService.loadUserByUsername(username);
                                 var authToken = new UsernamePasswordAuthenticationToken(
